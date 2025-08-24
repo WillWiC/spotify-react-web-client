@@ -53,7 +53,8 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
 
   const waitForDeviceToBeSelected = () => {
     return new Promise((resolve) => {
-      deviceSelectedInterval.current = setInterval(() => {
+  // Poll for device selection at a safe cadence to avoid tight loops
+  deviceSelectedInterval.current = setInterval(() => {
         if (webPlaybackInstance.current) {
           webPlaybackInstance.current.getCurrentState().then((state) => {
             if (state !== null) {
@@ -63,7 +64,7 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
             }
           });
         }
-      });
+  }, 1000);
     });
   };
 

@@ -1,4 +1,5 @@
 import axios from '../axios';
+import { store } from '../store/store';
 import type { Pagination } from '../interfaces/api';
 import { Device } from '../interfaces/devices';
 import type { PlayHistoryObject } from '../interfaces/player';
@@ -34,7 +35,32 @@ const getAvailableDevices = async () => {
 const startPlayback = async (
   body: { context_uri?: string; uris?: string[]; offset?: { position: number } } = {}
 ) => {
-  await axios.put('/me/player/play', body);
+  try {
+    await axios.put('/me/player/play', body);
+  } catch (error: any) {
+    // Attempt recovery when no active device is found
+    if (error?.response?.status === 404) {
+      try {
+        const devicesResp = await getAvailableDevices();
+        let targetDeviceId = devicesResp.devices.find((d) => d.is_active)?.id;
+
+        if (!targetDeviceId) {
+          const state = store.getState();
+          targetDeviceId = state.spotify.deviceId || devicesResp.devices[0]?.id;
+        }
+
+        if (targetDeviceId) {
+          await transferPlayback(targetDeviceId);
+          // retry play after transferring
+          await axios.put('/me/player/play', body);
+          return;
+        }
+      } catch (_) {
+        // fallthrough to rethrow original error
+      }
+    }
+    throw error;
+  }
 };
 
 /**
@@ -62,7 +88,26 @@ const previousTrack = async () => {
  * @description Seeks to the given position in the user’s currently playing track. This API only works for users who have Spotify Premium. The order of execution is not guaranteed when you use this API with other Player API endpoints.
  */
 const seekToPosition = async (position_ms: number) => {
-  await axios.put('/me/player/seek', {}, { params: { position_ms } });
+  try {
+    await axios.put('/me/player/seek', {}, { params: { position_ms } });
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      try {
+        const devicesResp = await getAvailableDevices();
+        let targetDeviceId = devicesResp.devices.find((d) => d.is_active)?.id;
+        if (!targetDeviceId) {
+          const state = store.getState();
+          targetDeviceId = state.spotify.deviceId || devicesResp.devices[0]?.id;
+        }
+        if (targetDeviceId) {
+          await transferPlayback(targetDeviceId);
+          await axios.put('/me/player/seek', {}, { params: { position_ms } });
+          return;
+        }
+      } catch (_) {}
+    }
+    throw error;
+  }
 };
 
 /**
@@ -78,7 +123,26 @@ const setRepeatMode = async (state: 'track' | 'context' | 'off') => {
  * @param volume_percent The volume to set. Must be a value from 0 to 100 inclusive.
  */
 const setVolume = async (volume_percent: number) => {
-  await axios.put('/me/player/volume', {}, { params: { volume_percent } });
+  try {
+    await axios.put('/me/player/volume', {}, { params: { volume_percent } });
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      try {
+        const devicesResp = await getAvailableDevices();
+        let targetDeviceId = devicesResp.devices.find((d) => d.is_active)?.id;
+        if (!targetDeviceId) {
+          const state = store.getState();
+          targetDeviceId = state.spotify.deviceId || devicesResp.devices[0]?.id;
+        }
+        if (targetDeviceId) {
+          await transferPlayback(targetDeviceId);
+          await axios.put('/me/player/volume', {}, { params: { volume_percent } });
+          return;
+        }
+      } catch (_) {}
+    }
+    throw error;
+  }
 };
 
 /**

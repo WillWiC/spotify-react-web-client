@@ -1,6 +1,5 @@
 import Axios from 'axios';
 import { getFromLocalStorageWithExpiry, setLocalStorageWithExpiry } from '../localstorage';
-import axios from 'axios';
 
 /* eslint-disable import/no-anonymous-default-export */
 const client_id = process.env.REACT_APP_SPOTIFY_CLIENT_ID as string;
@@ -63,23 +62,14 @@ const logInWithSpotify = async (anonymous?: boolean) => {
   const hashed = await sha256(codeVerifier);
   const codeChallenge = base64encode(hashed);
 
-  if (anonymous) {
-    authUrl.search = new URLSearchParams({
-      client_id,
-      scope: '',
-      redirect_uri,
-      response_type: 'token',
-    }).toString();
-  } else {
-    authUrl.search = new URLSearchParams({
-      client_id,
-      redirect_uri,
-      response_type: 'code',
-      scope: SCOPES.join(' '),
-      code_challenge_method: 'S256',
-      code_challenge: codeChallenge,
-    }).toString();
-  }
+  authUrl.search = new URLSearchParams({
+    client_id,
+    redirect_uri,
+    response_type: 'code',
+    scope: SCOPES.join(' '),
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
+  }).toString();
   window.location.href = authUrl.toString();
 };
 
@@ -106,9 +96,11 @@ const requestToken = async (code: string) => {
   });
 
   if (response.access_token) {
-    setLocalStorageWithExpiry('access_token', response.access_token, response.expires_in * 60 * 60);
-    axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.access_token;
-    localStorage.setItem('refresh_token', response.refresh_token);
+    // expires_in is in seconds; convert to ms
+    setLocalStorageWithExpiry('access_token', response.access_token, response.expires_in * 1000);
+    if (response.refresh_token) {
+      localStorage.setItem('refresh_token', response.refresh_token);
+    }
   }
 
   return response.access_token;
@@ -128,7 +120,8 @@ const getToken = async () => {
 
   const access_token = window.location.hash.split('&')[0].split('=')[1];
   if (access_token) {
-    setLocalStorageWithExpiry('public_access_token', access_token, 3600);
+    // TTL expects ms
+    setLocalStorageWithExpiry('public_access_token', access_token, 3600 * 1000);
     window.location.hash = '';
     return [access_token, false];
   }
@@ -166,10 +159,10 @@ export const getRefreshToken = async () => {
     return null;
   }
 
-  setLocalStorageWithExpiry('access_token', response.access_token, response.expires_in * 60 * 60);
-  axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.access_token;
-  if (response.refreshToken) {
-    localStorage.setItem('refresh_token', response.refreshToken);
+  // expires_in is in seconds; convert to ms
+  setLocalStorageWithExpiry('access_token', response.access_token, response.expires_in * 1000);
+  if (response.refresh_token) {
+    localStorage.setItem('refresh_token', response.refresh_token);
   }
   return response.access_token;
 };
